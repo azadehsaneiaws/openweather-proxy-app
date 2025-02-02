@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.34928.147
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenWeatherProxyApp.Server", "OpenWeatherProxyApp.Server\OpenWeatherProxyApp.Server.csproj", "{8FC92221-35DA-4AE3-832A-08E7EBC50B2E}"
+EndProject
+Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "openweatherproxyapp.client", "openweatherproxyapp.client\openweatherproxyapp.client.esproj", "{0199D496-0CF3-43D9-AF1D-257CD7691EDE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8FC92221-35DA-4AE3-832A-08E7EBC50B2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FC92221-35DA-4AE3-832A-08E7EBC50B2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FC92221-35DA-4AE3-832A-08E7EBC50B2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FC92221-35DA-4AE3-832A-08E7EBC50B2E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0199D496-0CF3-43D9-AF1D-257CD7691EDE}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {747E057C-365C-4D2A-B442-D3F6D880F1A8}
+	EndGlobalSection
+EndGlobal
