@@ -25,8 +25,18 @@ builder.Services.AddSwaggerGen(c =>
         Description = "A proxy service for fetching weather data from OpenWeather API."
     });
 });
+// Enabled CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy.AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader());
+});
+
 
 var app = builder.Build();
+app.UseCors("AllowAll");
 
 // Enable Swagger UI in development mode
 if (app.Environment.IsDevelopment())
