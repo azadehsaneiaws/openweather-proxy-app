@@ -1,58 +1,61 @@
 ﻿using OpenWeatherProxyApp.Server.Models;
 using OpenWeatherProxyApp.Server.Repositories;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Concurrent;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace OpenWeatherProxyApp.Server.Services
 {
-    /// <summary>
-    /// Weather service that handles business logic for retrieving weather data.
-    /// </summary>
     public class WeatherService : IWeatherService
     {
         private readonly IWeatherRepository _weatherRepository;
         private readonly ILogger<WeatherService> _logger;
+        private readonly IConfiguration _configuration;
 
-        /// <summary>
-        /// Constructor for WeatherService with dependency injection.
-        /// </summary>
-        /// <param name="weatherRepository">Injected repository for weather data retrieval</param>
-        /// <param name="logger">Injected logger for debugging</param>
-        public WeatherService(IWeatherRepository weatherRepository, ILogger<WeatherService> logger)
+        // Track API key usage (request count per API key per hour)
+        private static readonly ConcurrentDictionary<string, (int count, DateTime timestamp)> ApiKeyUsage = new();
+
+        public WeatherService(IWeatherRepository weatherRepository, ILogger<WeatherService> logger, IConfiguration configuration)
         {
             _weatherRepository = weatherRepository;
             _logger = logger;
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        /// <summary>
-        /// Retrieves weather data for a given city and country.
-        /// Applies additional business logic if needed.
-        /// </summary>
-        /// <param name="city">City name</param>
-        /// <param name="country">Country code (e.g., "us" for the USA)</param>
-        /// <param name="apiKey">Optional API key to use for the request</param>
-
-        /// <returns>WeatherModel containing weather details</returns>
-        public async Task<WeatherModel> GetWeatherAsync(string city, string country, string? apiKey = null)
+        public async Task<WeatherModel> GetWeatherAsync(string city, string country, string apiKey)
         {
-            _logger.LogInformation($"Fetching weather data for {city}, {country} using API key {apiKey ?? "Default"}");
+            var allowedKeysString = _configuration.GetSection("AllowedApiKeys").Value;
+            var allowedKeys = allowedKeysString?.Split(',') ?? Array.Empty<string>();
 
-            // Validate input parameters
-            if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(country))
+            if (!allowedKeys.Contains(apiKey))
             {
-                _logger.LogWarning("Invalid city or country provided.");
-                return null;
+                _logger.LogWarning($"Unauthorized API key: {apiKey}");
+                throw new UnauthorizedAccessException("Invalid API key.");
             }
 
-            // Call repository with optional API key
-            var weather = await _weatherRepository.GetWeatherAsync(city, country, apiKey);
+            // Enforce rate limit (5 requests per hour)
+            if (ApiKeyUsage.TryGetValue(apiKey, out var usage))
+            {
+                if (usage.timestamp.Hour == DateTime.UtcNow.Hour && usage.count >= 5)
+                {
+                    _logger.LogWarning($"Rate limit exceeded for API key: {apiKey}");
+                    throw new InvalidOperationException("Rate limit exceeded. You can make up to 5 requests per hour.");
+                }
+            }
 
-            if (weather == null)
+            // Fetch weather data
+            var weatherData = await _weatherRepository.GetWeatherAsync(city, country, apiKey);
+
+            if (weatherData == null)
             {
                 _logger.LogError($"Failed to fetch weather for {city}, {country}");
             }
 
-            return weather;
+            return weatherData;
         }
+
     }
 }

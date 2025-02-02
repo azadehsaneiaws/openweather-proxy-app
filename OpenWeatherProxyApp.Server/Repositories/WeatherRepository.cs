@@ -3,67 +3,56 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using OpenWeatherProxyApp.Server.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenWeatherProxyApp.Server.Repositories
 {
-    /// <summary>
-    /// Repository to fetch weather data from OpenWeather API.
-    /// </summary>
     public class WeatherRepository : IWeatherRepository
     {
-        private readonly HttpClient _httpClient; // HttpClient for making API requests
-        private readonly ILogger<WeatherRepository> _logger; // Logger for debugging
-
-        // Two API keys provided by OpenWeatherMap
-        private static readonly string[] ApiKeys =
-        {
-            "8b7535b42fe1c551f18028f64e8688f7",
-            "9f933451cebf1fa39de168a29a4d9a79"
-        };
-
-        private static int _currentApiKeyIndex = 0; // To track which API key to use
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<WeatherRepository> _logger;
+        private readonly List<string> _apiKeys;
+        private int _currentApiKeyIndex = 0;
 
         private const string BaseUrl = "https://api.openweathermap.org/data/2.5/weather";
 
-        /// <summary>
-        /// Constructor with dependency injection for HttpClient and Logger.
-        /// </summary>
-        /// <param name="httpClient">HttpClient for making API requests</param>
-        /// <param name="logger">Logger for debugging</param>
-        public WeatherRepository(HttpClient httpClient, ILogger<WeatherRepository> logger)
+        public WeatherRepository(HttpClient httpClient, ILogger<WeatherRepository> logger, IConfiguration configuration)
         {
             _httpClient = httpClient;
             _logger = logger;
+
+            // Read OpenWeather API keys from appsettings.json
+            _apiKeys = configuration.GetSection("OpenWeatherApiKeys").Get<List<string>>() ?? new List<string>();
+
+            if (!_apiKeys.Any())
+            {
+                _logger.LogError("No OpenWeather API keys found in appsettings.json");
+                throw new System.Exception("Missing OpenWeather API keys.");
+            }
         }
 
-        /// <summary>
-        /// Fetches weather data for a given city and country.
-        /// </summary>
-        /// <param name="city">City name</param>
-        /// <param name="country">Country code (e.g., "us" for the USA)</param>
-        /// <param name="apiKey">Optional API key</param>
-
-        /// <returns>WeatherModel object containing weather details</returns>
         public async Task<WeatherModel> GetWeatherAsync(string city, string country, string? apiKey = null)
         {
-            // Use provided API key if available, otherwise use the default one
-            string selectedApiKey = string.IsNullOrWhiteSpace(apiKey) ? ApiKeys[_currentApiKeyIndex] : apiKey;
-
+            string selectedApiKey = string.IsNullOrWhiteSpace(apiKey) ? _apiKeys[_currentApiKeyIndex] : apiKey;
             string requestUrl = $"{BaseUrl}?q={city},{country}&appid={selectedApiKey}&units=metric";
 
             try
             {
-                _logger.LogInformation($"Fetching weather for {city}, {country} using API key {selectedApiKey}");
+                _logger.LogInformation($"Fetching weather for {city}, {country} using API key: {selectedApiKey}");
 
                 var response = await _httpClient.GetAsync(requestUrl);
 
+                _logger.LogInformation($"Received response: {response.StatusCode}");
+
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
-                    _logger.LogWarning("Rate limit exceeded. Switching API key...");
+                    _logger.LogWarning("OpenWeather API rate limit exceeded. Switching API key...");
+                    _currentApiKeyIndex = (_currentApiKeyIndex + 1) % _apiKeys.Count;
+                    selectedApiKey = _apiKeys[_currentApiKeyIndex];
 
-                    _currentApiKeyIndex = (_currentApiKeyIndex + 1) % ApiKeys.Length;
-                    selectedApiKey = ApiKeys[_currentApiKeyIndex];
+                    _logger.LogWarning($"🔄 Retrying with new API key: {selectedApiKey}");
 
                     requestUrl = $"{BaseUrl}?q={city},{country}&appid={selectedApiKey}&units=metric";
                     response = await _httpClient.GetAsync(requestUrl);
@@ -75,9 +64,18 @@ namespace OpenWeatherProxyApp.Server.Repositories
                     return null;
                 }
 
-                var data = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($" Raw JSON Response: {responseContent}");
 
-                return new WeatherModel
+                if (string.IsNullOrWhiteSpace(responseContent))
+                {
+                    _logger.LogError($"OpenWeather API returned empty response for {city}, {country}");
+                    return null;
+                }
+
+                var data = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+                var weather = new WeatherModel
                 {
                     City = city,
                     Country = country,
@@ -85,6 +83,10 @@ namespace OpenWeatherProxyApp.Server.Repositories
                     Temperature = data.GetProperty("main").GetProperty("temp").GetDouble(),
                     Humidity = data.GetProperty("main").GetProperty("humidity").GetDouble()
                 };
+
+                _logger.LogInformation($"Parsed Weather Data: {JsonSerializer.Serialize(weather)}");
+
+                return weather;
             }
             catch (HttpRequestException ex)
             {

@@ -33,23 +33,35 @@ namespace OpenWeatherProxyApp.Server.Controllers
         /// <returns>Weather details</returns>
         [HttpGet]
         public async Task<IActionResult> GetWeather(
-            [FromQuery] string city,
-            [FromQuery] string country,
-            [FromQuery] string? apiKey = null)
+         [FromQuery] string city,
+         [FromQuery] string country,
+         [FromHeader] string apiKey)
         {
-            if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(country))
+            if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return BadRequest("City and country are required.");
+                return Unauthorized(new { error = "API key is required." });
             }
 
-            var weather = await _weatherService.GetWeatherAsync(city, country, apiKey);
-
-            if (weather == null)
+            try
             {
-                return NotFound("Weather data not found.");
-            }
+                var weather = await _weatherService.GetWeatherAsync(city, country, apiKey);
 
-            return Ok(weather);
+                if (weather == null)
+                {
+                    return NotFound(new { error = "Weather data not found. Please check the city and country." });
+                }
+
+                return Ok(weather);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized(new { error = "Invalid API key." });
+            }
+            catch (InvalidOperationException)
+            {
+                return StatusCode(429, new { error = "Rate limit exceeded. You can make up to 5 requests per hour." });
+            }
         }
     }
 }
+    
