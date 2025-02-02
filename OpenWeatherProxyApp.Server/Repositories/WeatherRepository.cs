@@ -22,8 +22,6 @@ namespace OpenWeatherProxyApp.Server.Repositories
         {
             _httpClient = httpClient;
             _logger = logger;
-
-            // Read OpenWeather API keys from appsettings.json
             _apiKeys = configuration.GetSection("OpenWeatherApiKeys").Get<List<string>>() ?? new List<string>();
 
             if (!_apiKeys.Any())
@@ -43,16 +41,23 @@ namespace OpenWeatherProxyApp.Server.Repositories
                 _logger.LogInformation($"Fetching weather for {city}, {country} using API key: {selectedApiKey}");
 
                 var response = await _httpClient.GetAsync(requestUrl);
-
                 _logger.LogInformation($"Received response: {response.StatusCode}");
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogError($"Unauthorized API key: {selectedApiKey}. Check OpenWeather API key.");
+                    return null;
+                }
 
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
-                    _logger.LogWarning("OpenWeather API rate limit exceeded. Switching API key...");
+                    _logger.LogWarning("OpenWeather API rate limit exceeded. Rotating API key...");
+
+                    // Rotate API key
                     _currentApiKeyIndex = (_currentApiKeyIndex + 1) % _apiKeys.Count;
                     selectedApiKey = _apiKeys[_currentApiKeyIndex];
 
-                    _logger.LogWarning($"🔄 Retrying with new API key: {selectedApiKey}");
+                    _logger.LogWarning($"Retrying with new API key: {selectedApiKey}");
 
                     requestUrl = $"{BaseUrl}?q={city},{country}&appid={selectedApiKey}&units=metric";
                     response = await _httpClient.GetAsync(requestUrl);
@@ -65,7 +70,6 @@ namespace OpenWeatherProxyApp.Server.Repositories
                 }
 
                 var responseContent = await response.Content.ReadAsStringAsync();
-                _logger.LogInformation($" Raw JSON Response: {responseContent}");
 
                 if (string.IsNullOrWhiteSpace(responseContent))
                 {
@@ -73,15 +77,33 @@ namespace OpenWeatherProxyApp.Server.Repositories
                     return null;
                 }
 
-                var data = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                _logger.LogInformation($"Raw JSON Response: {responseContent}");
+
+                JsonElement data;
+                try
+                {
+                    data = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogError($"JSON parsing failed: {ex.Message}");
+                    return null;
+                }
+
+                if (!data.TryGetProperty("weather", out var weatherArray) || weatherArray.GetArrayLength() == 0 ||
+                    !data.TryGetProperty("main", out var mainData))
+                {
+                    _logger.LogError("Unexpected API response structure. Missing required properties.");
+                    return null;
+                }
 
                 var weather = new WeatherModel
                 {
                     City = city,
                     Country = country,
-                    Description = data.GetProperty("weather")[0].GetProperty("description").GetString(),
-                    Temperature = data.GetProperty("main").GetProperty("temp").GetDouble(),
-                    Humidity = data.GetProperty("main").GetProperty("humidity").GetDouble()
+                    Description = weatherArray[0].GetProperty("description").GetString(),
+                    Temperature = mainData.GetProperty("temp").GetDouble(),
+                    Humidity = mainData.GetProperty("humidity").GetDouble()
                 };
 
                 _logger.LogInformation($"Parsed Weather Data: {JsonSerializer.Serialize(weather)}");
@@ -93,9 +115,9 @@ namespace OpenWeatherProxyApp.Server.Repositories
                 _logger.LogError($"HTTP request failed: {ex.Message}");
                 return null;
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _logger.LogError($"JSON parsing failed: {ex.Message}");
+                _logger.LogError($"Unexpected error fetching weather data: {ex.Message}");
                 return null;
             }
         }

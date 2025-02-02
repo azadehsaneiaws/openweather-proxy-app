@@ -15,8 +15,8 @@ namespace OpenWeatherProxyApp.Server.Services
         private readonly ILogger<WeatherService> _logger;
         private readonly IConfiguration _configuration;
 
-        // Track API key usage (request count per API key per hour)
-        private static readonly ConcurrentDictionary<string, (int count, DateTime timestamp)> ApiKeyUsage = new();
+        // Rate limit: 5 requests per API key per hour
+        private static readonly ConcurrentDictionary<string, (int Count, DateTime Timestamp)> ApiKeyUsage = new();
 
         public WeatherService(IWeatherRepository weatherRepository, ILogger<WeatherService> logger, IConfiguration configuration)
         {
@@ -27,8 +27,7 @@ namespace OpenWeatherProxyApp.Server.Services
 
         public async Task<WeatherModel> GetWeatherAsync(string city, string country, string apiKey)
         {
-            var allowedKeysString = _configuration.GetSection("AllowedApiKeys").Value;
-            var allowedKeys = allowedKeysString?.Split(',') ?? Array.Empty<string>();
+            var allowedKeys = _configuration.GetSection("AllowedApiKeys").Get<string[]>() ?? Array.Empty<string>();
 
             if (!allowedKeys.Contains(apiKey))
             {
@@ -37,17 +36,28 @@ namespace OpenWeatherProxyApp.Server.Services
             }
 
             // Enforce rate limit (5 requests per hour)
-            if (ApiKeyUsage.TryGetValue(apiKey, out var usage))
+            var currentTime = DateTime.UtcNow;
+            ApiKeyUsage.AddOrUpdate(apiKey,
+                _ => (1, currentTime),
+                (_, usage) => usage.Timestamp.Hour == currentTime.Hour
+                    ? (usage.Count + 1, usage.Timestamp)
+                    : (1, currentTime) // Reset count when hour changes
+            );
+
+            if (ApiKeyUsage[apiKey].Count > 5)
             {
-                if (usage.timestamp.Hour == DateTime.UtcNow.Hour && usage.count >= 5)
-                {
-                    _logger.LogWarning($"Rate limit exceeded for API key: {apiKey}");
-                    throw new InvalidOperationException("Rate limit exceeded. You can make up to 5 requests per hour.");
-                }
+                _logger.LogWarning($"Rate limit exceeded for API key: {apiKey}");
+                throw new InvalidOperationException("Rate limit exceeded. You can make up to 5 requests per hour.");
             }
 
-            // Fetch weather data
-            var weatherData = await _weatherRepository.GetWeatherAsync(city, country, apiKey);
+            var openWeatherApiKeys = _configuration.GetSection("OpenWeatherApiKeys").Get<string[]>() ?? Array.Empty<string>();
+            if (openWeatherApiKeys.Length == 0)
+            {
+                _logger.LogError("No OpenWeather API keys available.");
+                throw new Exception("Missing OpenWeather API keys.");
+            }
+
+            var weatherData = await _weatherRepository.GetWeatherAsync(city, country, openWeatherApiKeys[0]);
 
             if (weatherData == null)
             {
@@ -56,6 +66,5 @@ namespace OpenWeatherProxyApp.Server.Services
 
             return weatherData;
         }
-
     }
 }
