@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using OpenWeatherProxyApp.Server.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 
 namespace OpenWeatherProxyApp.Server.Repositories
 {
@@ -41,47 +42,41 @@ namespace OpenWeatherProxyApp.Server.Repositories
         /// </summary>
         /// <param name="city">City name</param>
         /// <param name="country">Country code (e.g., "us" for the USA)</param>
-        /// <returns>WeatherModel object containing weather details</returns>
-        public async Task<WeatherModel> GetWeatherAsync(string city, string country)
-        {
-            // Get the current API key from the array
-            string apiKey = ApiKeys[_currentApiKeyIndex];
+        /// <param name="apiKey">Optional API key</param>
 
-            // Construct the request URL with city, country, and API key
-            string requestUrl = $"{BaseUrl}?q={city},{country}&appid={apiKey}&units=metric";
+        /// <returns>WeatherModel object containing weather details</returns>
+        public async Task<WeatherModel> GetWeatherAsync(string city, string country, string? apiKey = null)
+        {
+            // Use provided API key if available, otherwise use the default one
+            string selectedApiKey = string.IsNullOrWhiteSpace(apiKey) ? ApiKeys[_currentApiKeyIndex] : apiKey;
+
+            string requestUrl = $"{BaseUrl}?q={city},{country}&appid={selectedApiKey}&units=metric";
 
             try
             {
-                _logger.LogInformation($"Fetching weather for {city}, {country} using API key {apiKey}");
+                _logger.LogInformation($"Fetching weather for {city}, {country} using API key {selectedApiKey}");
 
-                // Make an asynchronous GET request to OpenWeather API
                 var response = await _httpClient.GetAsync(requestUrl);
 
-                // If the API returns a rate limit error (status 429), switch API keys
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
                     _logger.LogWarning("Rate limit exceeded. Switching API key...");
 
-                    // Switch to the next API key
                     _currentApiKeyIndex = (_currentApiKeyIndex + 1) % ApiKeys.Length;
-                    apiKey = ApiKeys[_currentApiKeyIndex];
+                    selectedApiKey = ApiKeys[_currentApiKeyIndex];
 
-                    // Retry the request with the new API key
-                    requestUrl = $"{BaseUrl}?q={city},{country}&appid={apiKey}&units=metric";
+                    requestUrl = $"{BaseUrl}?q={city},{country}&appid={selectedApiKey}&units=metric";
                     response = await _httpClient.GetAsync(requestUrl);
                 }
 
-                // If the response is not successful, log an error and return null
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogError($"Failed to fetch weather for {city}, {country}. Status Code: {response.StatusCode}");
                     return null;
                 }
 
-                // Parse the response JSON into a dynamic object
                 var data = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
 
-                // Map JSON data to WeatherModel and return it
                 return new WeatherModel
                 {
                     City = city,

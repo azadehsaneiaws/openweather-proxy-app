@@ -30,10 +30,12 @@ namespace OpenWeatherProxyApp.Server.Services
         /// </summary>
         /// <param name="city">City name</param>
         /// <param name="country">Country code (e.g., "us" for the USA)</param>
+        /// <param name="apiKey">Optional API key to use for the request</param>
+
         /// <returns>WeatherModel containing weather details</returns>
-        public async Task<WeatherModel> GetWeatherAsync(string city, string country)
+        public async Task<WeatherModel> GetWeatherAsync(string city, string country, string? apiKey = null)
         {
-            _logger.LogInformation($"Fetching weather data for {city}, {country}");
+            _logger.LogInformation($"Fetching weather data for {city}, {country} using API key {apiKey ?? "Default"}");
 
             // Validate input parameters
             if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(country))
@@ -42,8 +44,8 @@ namespace OpenWeatherProxyApp.Server.Services
                 return null;
             }
 
-            // Call repository to get weather data
-            var weather = await _weatherRepository.GetWeatherAsync(city, country);
+            // Call repository with optional API key
+            var weather = await _weatherRepository.GetWeatherAsync(city, country, apiKey);
 
             if (weather == null)
             {

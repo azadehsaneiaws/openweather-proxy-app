@@ -13,7 +13,9 @@ namespace OpenWeatherProxyApp.Server.Services
         /// </summary>
         /// <param name="city">City name</param>
         /// <param name="country">Country code (e.g., "us" for the USA)</param>
+        /// <param name="apiKey">Optional API key to use for the request</param>
+
         /// <returns>A WeatherModel object containing weather details.</returns>
-        Task<WeatherModel> GetWeatherAsync(string city, string country);
+        Task<WeatherModel> GetWeatherAsync(string city, string country, string? apiKey = null);
     }
 }
