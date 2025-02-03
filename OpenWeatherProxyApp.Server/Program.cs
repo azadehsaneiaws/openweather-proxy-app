@@ -15,6 +15,7 @@ builder.Services.AddHttpClient(); // Register HttpClient for API calls
 builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();
 builder.Services.AddScoped<IWeatherService, WeatherService>();
 
+// Enable API documentation with Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -25,17 +26,20 @@ builder.Services.AddSwaggerGen(c =>
         Description = "A proxy service for fetching weather data from OpenWeather API."
     });
 });
-// Enabled CORS
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
 });
 
-
 var app = builder.Build();
+
+app.UseRouting();
 app.UseCors("AllowAll");
 
 // Enable Swagger UI in development mode
@@ -45,7 +49,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "OpenWeather Proxy API v1"));
 }
 
-app.UseRouting();
 app.UseAuthorization();
 app.MapControllers();
+
 app.Run();

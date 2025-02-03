@@ -35,7 +35,7 @@ namespace OpenWeatherProxyApp.Server.Controllers
         public async Task<IActionResult> GetWeather(
          [FromQuery] string city,
          [FromQuery] string country,
-         [FromHeader] string apiKey)
+         [FromHeader(Name = "Apikey")] string apiKey)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
             {
