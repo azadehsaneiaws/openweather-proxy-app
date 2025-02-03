@@ -2,9 +2,9 @@ import axios from "axios";
 
 export const getWeather = async (city: string, country: string, apiKey: string) => {
   try {
-    const response = await axios.get("http://localhost:7250/api/weather", {
+    const response = await axios.get("https://localhost:7250/api/weather", {
       params: { city, country },
-      headers: { "apiKey": apiKey }, // Ensure correct casing
+      headers: { "apiKey": apiKey }, 
     });
     return response.data;
   } catch (error) {

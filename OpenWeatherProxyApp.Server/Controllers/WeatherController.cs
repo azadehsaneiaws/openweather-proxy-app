@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using OpenWeatherProxyApp.Server.Models;
 using OpenWeatherProxyApp.Server.Services;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace OpenWeatherProxyApp.Server.Controllers
@@ -29,14 +31,25 @@ namespace OpenWeatherProxyApp.Server.Controllers
         /// </summary>
         /// <param name="city">City name</param>
         /// <param name="country">Country code</param>
-        /// <param name="apiKey">Optional API key to use for the request</param>
         /// <returns>Weather details</returns>
         [HttpGet]
         public async Task<IActionResult> GetWeather(
-         [FromQuery] string city,
-         [FromQuery] string country,
-         [FromHeader(Name = "Apikey")] string apiKey)
+            [FromQuery] string city,
+            [FromQuery] string country,
+            [FromServices] IHttpContextAccessor httpContextAccessor) // Inject HTTP Context
         {
+            var headers = httpContextAccessor.HttpContext?.Request.Headers;
+
+            if (headers == null)
+            {
+                return Unauthorized(new { error = "No headers found in the request." });
+            }
+
+            // Get API key, case insensitive
+            string apiKey = headers.FirstOrDefault(h => string.Equals(h.Key, "apikey", StringComparison.OrdinalIgnoreCase)).Value;
+
+            Console.WriteLine($"Received API Key: {apiKey}");
+
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 return Unauthorized(new { error = "API key is required." });
@@ -61,7 +74,11 @@ namespace OpenWeatherProxyApp.Server.Controllers
             {
                 return StatusCode(429, new { error = "Rate limit exceeded. You can make up to 5 requests per hour." });
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR: {ex.Message}"); // Log actual error
+                return StatusCode(500, new { error = "An internal server error occurred. Check backend logs." });
+            }
         }
     }
 }
-    
